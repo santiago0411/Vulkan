@@ -42,7 +42,8 @@ project "Vulkan"
 		{
 			"%{Library.ShaderC_Debug}",
 			"%{Library.SPIRV_Cross_Debug}",
-			"%{Library.SPIRV_Cross_GLSL_Debug}"
+			"%{Library.SPIRV_Cross_GLSL_Debug}",
+			"%{Library.Vulkan}"
 		}
 
 		postbuildcommands
@@ -59,5 +60,6 @@ project "Vulkan"
 		{
 			"%{Library.ShaderC_Release}",
 			"%{Library.SPIRV_Cross_Release}",
-			"%{Library.SPIRV_Cross_GLSL_Release}"
+			"%{Library.SPIRV_Cross_GLSL_Release}",
+			"%{Library.Vulkan}"
 		}
