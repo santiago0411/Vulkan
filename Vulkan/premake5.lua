@@ -10,13 +10,24 @@ project "Vulkan"
 	files
 	{
 		"src/**.h",
-		"src/**.cpp"
+		"src/**.cpp",
+		"vendor/glm/glm/**.hpp",
+		"vendor/glm/glm/**.inl",
 	}
 
 	includedirs
 	{
+		"src",
+		"%{IncludeDir.GLFW}",
+		"%{IncludeDir.glm}",
+		"%{IncludeDir.VulkanSDK}",
 		"%{wks.location}/Vulkan/src",
 		"%{wks.location}/Vulkan/vendor",
+	}
+
+	links
+	{
+		"GLFW"
 	}
 
 	filter "system:windows"
@@ -27,6 +38,13 @@ project "Vulkan"
 		runtime "Debug"
 		symbols "on"
 
+		links
+		{
+			"%{Library.ShaderC_Debug}",
+			"%{Library.SPIRV_Cross_Debug}",
+			"%{Library.SPIRV_Cross_GLSL_Debug}"
+		}
+
 		postbuildcommands
 		{
 			"{COPYDIR} \"%{LibraryDir.VulkanSDK_DebugDLL}\" \"%{cfg.targetdir}\""
@@ -36,3 +54,10 @@ project "Vulkan"
 		defines "VULKAN_RELEASE"
 		runtime "Release"
 		optimize "on"
+	
+		links
+		{
+			"%{Library.ShaderC_Release}",
+			"%{Library.SPIRV_Cross_Release}",
+			"%{Library.SPIRV_Cross_GLSL_Release}"
+		}

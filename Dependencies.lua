@@ -1,6 +1,8 @@
 VULKAN_SDK = os.getenv("VULKAN_SDK")
 
 IncludeDir = {}
+IncludeDir["GLFW"]			= "%{wks.location}/Vulkan/vendor/GLFW/include"
+IncludeDir["glm"]			= "%{wks.location}/Vulkan/vendor/glm"
 IncludeDir["VulkanSDK"]		= "%{VULKAN_SDK}/Include"
 
 LibraryDir = {}
