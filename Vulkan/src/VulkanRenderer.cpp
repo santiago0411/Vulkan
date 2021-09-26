@@ -28,6 +28,7 @@ struct RendererContext
 
 	VkFormat SwapChainImageFormat;
 	VkExtent2D SwapChainExtent{};
+	std::vector<Utils::SwapChainImage> SwapChainImages;
 };
 
 static RendererContext* s_Context = nullptr;
@@ -85,6 +86,9 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 void VulkanRenderer::Shutdown()
 {
 	DestroyDebugCallback();
+
+	for (auto& image : s_Context->SwapChainImages)
+		vkDestroyImageView(s_Context->LogicalDevice, image.ImageView, nullptr);
 
 	if (s_Context->SwapChain != nullptr)
 		vkDestroySwapchainKHR(s_Context->LogicalDevice, s_Context->SwapChain, nullptr);
@@ -277,4 +281,5 @@ void VulkanRenderer::CreateSwapChain()
 
 	s_Context->SwapChainImageFormat = surfaceFormat.format;
 	s_Context->SwapChainExtent = extent;
+	s_Context->SwapChainImages = Utils::GetSwapChainImages(s_Context->LogicalDevice, s_Context->SwapChain, surfaceFormat.format);
 }

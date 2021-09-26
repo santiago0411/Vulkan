@@ -5,6 +5,7 @@
 #pragma warning(pop)
 
 #include <vector>
+#include <stdexcept>
 
 namespace Utils
 {
@@ -33,6 +34,12 @@ namespace Utils
 		{
 			return !PresentationModes.empty() && !Formats.empty();
 		}
+	};
+
+	struct SwapChainImage
+	{
+		VkImage Image = nullptr;
+		VkImageView ImageView = nullptr;
 	};
 
 	static bool CheckInstanceExtensionSupport(const std::vector<const char*>& extensions)
@@ -214,5 +221,51 @@ namespace Utils
 		newExtent.height = std::max(surfaceCapabilities.minImageExtent.height, std::min(surfaceCapabilities.maxImageExtent.height, newExtent.height));
 
 		return newExtent;
+	}
+
+	static VkImageView CreateImageView(VkDevice logicalDevice, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+	{
+		VkImageViewCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = image;
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = format;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+		createInfo.subresourceRange.aspectMask = aspectFlags;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		VkImageView imageView;
+		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, &imageView) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create an ImageView!");
+
+		return imageView;
+	}
+
+	static std::vector<SwapChainImage> GetSwapChainImages(VkDevice logicalDevice, VkSwapchainKHR swapChain, VkFormat imageFormat)
+	{
+		uint32_t swapChainImageCount;
+		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &swapChainImageCount, nullptr);
+
+		std::vector<VkImage> images(swapChainImageCount);
+		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &swapChainImageCount, images.data());
+
+		std::vector<SwapChainImage> swapChainImages(swapChainImageCount);
+
+		for (const auto& image: images)
+		{
+			swapChainImages.emplace_back(SwapChainImage{
+				image,
+				CreateImageView(logicalDevice, image, imageFormat, VK_IMAGE_ASPECT_COLOR_BIT)
+			});
+		}
+
+		return swapChainImages;
 	}
 }
