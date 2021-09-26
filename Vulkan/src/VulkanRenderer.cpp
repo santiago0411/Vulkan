@@ -24,6 +24,10 @@ struct RendererContext
 	VkDevice LogicalDevice = nullptr;
 	VkQueue GraphicsQueue = nullptr;
 	VkQueue PresentationQueue = nullptr;
+	VkSwapchainKHR SwapChain = nullptr;
+
+	VkFormat SwapChainImageFormat;
+	VkExtent2D SwapChainExtent{};
 };
 
 static RendererContext* s_Context = nullptr;
@@ -66,6 +70,7 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 		CreateSurface();
 		GetPhysicalDevice();
 		CreateLogicalDevice();
+		CreateSwapChain();
 
 		return true;
 	}
@@ -80,6 +85,9 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 void VulkanRenderer::Shutdown()
 {
 	DestroyDebugCallback();
+
+	if (s_Context->SwapChain != nullptr)
+		vkDestroySwapchainKHR(s_Context->LogicalDevice, s_Context->SwapChain, nullptr);
 
 	if (s_Context->Surface != nullptr)
 		vkDestroySurfaceKHR(s_Context->VulkanInstance, s_Context->Surface, nullptr);
@@ -139,6 +147,18 @@ void VulkanRenderer::CreateInstance(const std::vector<const char*>& extensions)
 	if (vkCreateInstance(&createInfo, nullptr, &s_Context->VulkanInstance) != VK_SUCCESS)
 		throw std::runtime_error("Failed to created a Vulkan Instance!");
 }
+
+
+void VulkanRenderer::CreateSurface()
+{
+	const auto result = glfwCreateWindowSurface(s_Context->VulkanInstance,
+		s_Context->Window->GetGLFWWindow(),
+		nullptr, &s_Context->Surface);
+
+	if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to create a surface!");
+}
+
 
 void VulkanRenderer::GetPhysicalDevice()
 {
@@ -202,12 +222,59 @@ void VulkanRenderer::CreateLogicalDevice()
 	vkGetDeviceQueue(s_Context->LogicalDevice, s_Context->DeviceQueueFamilyIndices.PresentationFamily, 0, &s_Context->PresentationQueue);
 }
 
-void VulkanRenderer::CreateSurface()
+void VulkanRenderer::CreateSwapChain()
 {
-	const auto result = glfwCreateWindowSurface(s_Context->VulkanInstance, 
-											s_Context->Window->GetGLFWWindow(), 
-											nullptr, &s_Context->Surface);
+	VkSurfaceFormatKHR surfaceFormat = Utils::ChooseBestSurfaceFormat(s_Context->SwapChainDetails.Formats);
+	VkPresentModeKHR presentMode = Utils::ChooseBestPresentationMode(s_Context->SwapChainDetails.PresentationModes);
+	VkExtent2D extent = Utils::ChooseSwapExtent(s_Context->SwapChainDetails.SurfaceCapabilities, s_Context->Window);
 
-	if (result != VK_SUCCESS)
-		throw std::runtime_error("Failed to create a surface!");
+	// Get 1 more image than the minimum to allow triple buffering
+	uint32_t imageCount = s_Context->SwapChainDetails.SurfaceCapabilities.minImageCount + 1;
+	const uint32_t maxImageCount = s_Context->SwapChainDetails.SurfaceCapabilities.maxImageCount;
+
+	// MaxImageCount can be 0 if it's limitless so check that it is greater than 0
+	// Clamp image count to max value if it overflowed adding 1
+	if (maxImageCount > 0 && maxImageCount < imageCount)
+		imageCount = maxImageCount;
+
+	VkSwapchainCreateInfoKHR createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = s_Context->Surface;
+	createInfo.imageFormat = surfaceFormat.format;
+	createInfo.imageColorSpace = surfaceFormat.colorSpace;
+	createInfo.presentMode = presentMode;
+	createInfo.imageExtent = extent;
+	createInfo.minImageCount = imageCount;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	createInfo.preTransform = s_Context->SwapChainDetails.SurfaceCapabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	createInfo.clipped = VK_TRUE;
+
+	Utils::QueueFamilyIndices& indices = s_Context->DeviceQueueFamilyIndices;
+	if (indices.GraphicsFamily != indices.PresentationFamily)
+	{
+		const uint32_t queueFamilyIndices[] = {
+			(uint32_t)indices.GraphicsFamily,
+			(uint32_t)indices.PresentationFamily
+		};
+
+		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+		createInfo.queueFamilyIndexCount = 2;
+		createInfo.pQueueFamilyIndices = queueFamilyIndices;
+	}
+	else
+	{
+		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		createInfo.queueFamilyIndexCount = 0;
+		createInfo.pQueueFamilyIndices = nullptr;
+	}
+
+	createInfo.oldSwapchain = nullptr;
+
+	if (vkCreateSwapchainKHR(s_Context->LogicalDevice, &createInfo, nullptr, &s_Context->SwapChain) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create a Swapchain!");
+
+	s_Context->SwapChainImageFormat = surfaceFormat.format;
+	s_Context->SwapChainExtent = extent;
 }

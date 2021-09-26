@@ -13,6 +13,8 @@ public:
 	void Update() const;
 
 	GLFWwindow* GetGLFWWindow() const { return m_Window; }
+
+	void GetWidthAndHeight(int32_t& outWidth, int32_t& outHeight) const;
 private:
 	GLFWwindow* m_Window = nullptr;
 };

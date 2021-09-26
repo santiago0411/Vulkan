@@ -17,4 +17,5 @@ private:
 	static void CreateSurface();
 	static void GetPhysicalDevice();
 	static void CreateLogicalDevice();
+	static void CreateSwapChain();
 };

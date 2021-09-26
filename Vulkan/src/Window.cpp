@@ -14,3 +14,8 @@ void Window::Update() const
 {
 	glfwSwapBuffers(m_Window);
 }
+
+void Window::GetWidthAndHeight(int32_t& outWidth, int32_t& outHeight) const
+{
+	glfwGetFramebufferSize(m_Window, &outWidth, &outHeight);
+}
