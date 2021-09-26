@@ -1,47 +1,37 @@
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "Window.h"
+#include "VulkanRenderer.h"
 
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
+#include <GLFW/glfw3.h>
 
 #include <iostream>
 
-int main()
+static bool InitGLFW()
 {
 	if (!glfwInit())
-		return -1;
+		return false;
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow* window = glfwCreateWindow(1280, 720, "Vulkan", nullptr, nullptr);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	return true;
+}
 
-	if (!window)
-	{
-		glfwTerminate();
+int main()
+{
+	if (!InitGLFW())
 		return -1;
-	}
 
-	uint32_t extensionCount = 0;
-	VkResult result = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-	if (result != VK_SUCCESS)
-	{
-		glfwTerminate();
+	const auto window = CreateRef<Window>("Vulkan", 1280, 720);
+	
+	if (!VulkanRenderer::Init(window))
 		return -1;
-	}
 
-	std::cout << "Extension count: " << extensionCount << '\n';
-
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
-
-	while (!glfwWindowShouldClose(window))
+	while (!glfwWindowShouldClose(window->m_Window))
 	{
-		glfwSwapBuffers(window);
+		window->Update();
 		glfwPollEvents();
 	}
 
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	VulkanRenderer::Shutdown();
 
 	return 0;
 }
