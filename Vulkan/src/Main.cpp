@@ -25,7 +25,7 @@ int main()
 	if (!VulkanRenderer::Init(window))
 		return -1;
 
-	while (!glfwWindowShouldClose(window->m_Window))
+	while (!glfwWindowShouldClose(window->GetGLFWWindow()))
 	{
 		window->Update();
 		glfwPollEvents();

@@ -3,14 +3,18 @@
 #include "Base.h"
 #include "Window.h"
 
+#include <vector>
+
 class VulkanRenderer
 {
 public:
-	static bool Init(WeakRef<Window> windowContext);
+	static bool Init(Ref<Window> windowContext);
 	static void Shutdown();
 
 private:
-	static void CreateInstance();
+	static std::vector<const char*> ValidateExtensions();
+	static void CreateInstance(const std::vector<const char*>& extensions);
+	static void CreateSurface();
 	static void GetPhysicalDevice();
 	static void CreateLogicalDevice();
 };

@@ -2,8 +2,6 @@
 
 #include <GLFW/glfw3.h>
 
-int main();
-
 class Window
 {
 public:
@@ -13,8 +11,9 @@ public:
 	~Window();
 
 	void Update() const;
+
+	GLFWwindow* GetGLFWWindow() const { return m_Window; }
 private:
-	friend int main();
 	GLFWwindow* m_Window = nullptr;
 };
 

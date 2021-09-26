@@ -30,6 +30,11 @@ project "Vulkan"
 		"GLFW"
 	}
 
+	defines
+	{
+		"GLFW_INCLUDE_VULKAN"
+	}
+
 	filter "system:windows"
 		systemversion "latest"
 
