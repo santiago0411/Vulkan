@@ -18,5 +18,6 @@ private:
 	static void GetPhysicalDevice();
 	static void CreateLogicalDevice();
 	static void CreateSwapChain();
+	static void CreateRenderPass();
 	static void CreateGraphicsPipeline();
 };
