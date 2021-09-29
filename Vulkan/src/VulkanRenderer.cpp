@@ -1,6 +1,7 @@
 #include "VulkanRenderer.h"
 
 #include "VulkanRendererUtils.h"
+#include "VulkanShader.h"
 
 #pragma warning(push, 0)
 #include <GLFW/glfw3.h>
@@ -72,6 +73,7 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 		GetPhysicalDevice();
 		CreateLogicalDevice();
 		CreateSwapChain();
+		CreateGraphicsPipeline();
 
 		return true;
 	}
@@ -116,7 +118,7 @@ std::vector<const char*> VulkanRenderer::ValidateExtensions()
 	if (!Debug::CheckValidationLayerSupport())
 		throw std::runtime_error("Requested validation layers are not available!");
 
-	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 
 	if (!Utils::CheckInstanceExtensionSupport(extensions))
@@ -282,4 +284,36 @@ void VulkanRenderer::CreateSwapChain()
 	s_Context->SwapChainImageFormat = surfaceFormat.format;
 	s_Context->SwapChainExtent = extent;
 	s_Context->SwapChainImages = Utils::GetSwapChainImages(s_Context->LogicalDevice, s_Context->SwapChain, surfaceFormat.format);
+}
+
+void VulkanRenderer::CreateGraphicsPipeline()
+{
+	const auto shader = VulkanShader::CreateFromSpv("Shader", "shaders/cache/vert.spv", "shaders/cache/frag.spv");
+
+	VkShaderModule vertexShaderModule;
+	Utils::CreateShaderModule(shader->GetShaderBinary(VulkanShader::ShaderType::Vertex), s_Context->LogicalDevice, vertexShaderModule);
+
+	VkShaderModule fragShaderModule;
+	Utils::CreateShaderModule(shader->GetShaderBinary(VulkanShader::ShaderType::Fragment), s_Context->LogicalDevice, fragShaderModule);
+
+	VkPipelineShaderStageCreateInfo vertexCreateInfo = {};
+	vertexCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertexCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertexCreateInfo.module = vertexShaderModule;
+	vertexCreateInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fragmentCreateInfo = {};
+	fragmentCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragmentCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragmentCreateInfo.module = fragShaderModule;
+	fragmentCreateInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertexCreateInfo, fragmentCreateInfo };
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
+	pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCreateInfo.pStages = shaderStages;
+
+	vkDestroyShaderModule(s_Context->LogicalDevice, fragShaderModule, nullptr);
+	vkDestroyShaderModule(s_Context->LogicalDevice, vertexShaderModule, nullptr);
 }

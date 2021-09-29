@@ -20,7 +20,7 @@ int main()
 	if (!InitGLFW())
 		return -1;
 
-	const auto window = CreateRef<Window>("Vulkan", 1280, 720);
+	Ref<Window> window = Window::Create("Vulkan", 1280, 720);
 	
 	if (!VulkanRenderer::Init(window))
 		return -1;

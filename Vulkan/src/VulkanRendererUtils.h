@@ -268,4 +268,15 @@ namespace Utils
 
 		return swapChainImages;
 	}
+
+	static void CreateShaderModule(const std::vector<uint32_t>& buffer, VkDevice logicalDevice, VkShaderModule& shaderModule)
+	{
+		VkShaderModuleCreateInfo createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.codeSize = buffer.size();
+		createInfo.pCode = buffer.data();
+
+		if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+			throw std::runtime_error("Error creating shader module!");
+	}
 }
