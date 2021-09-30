@@ -9,6 +9,7 @@ class VulkanRenderer
 {
 public:
 	static bool Init(Ref<Window> windowContext);
+	static void Draw();
 	static void Shutdown();
 
 private:
@@ -24,4 +25,5 @@ private:
 	static void CreateCommandPool();
 	static void CreateCommandBuffers();
 	static void RecordCommands();
+	static void CreateSynchronization();
 };

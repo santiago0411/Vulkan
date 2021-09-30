@@ -9,6 +9,8 @@
 
 namespace Utils
 {
+	static constexpr uint32_t MAX_FRAME_DRAWS = 2;
+
 	static const std::vector<const char*> s_DeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};

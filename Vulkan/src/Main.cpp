@@ -20,15 +20,15 @@ int main()
 	if (!InitGLFW())
 		return -1;
 
-	Ref<Window> window = Window::Create("Vulkan", 1280, 720);
+	Ref<Window> window = Window::Create("Vulkan", 800, 600);
 	
 	if (!VulkanRenderer::Init(window))
 		return -1;
 
 	while (!glfwWindowShouldClose(window->GetGLFWWindow()))
 	{
-		window->Update();
 		glfwPollEvents();
+		VulkanRenderer::Draw();
 	}
 
 	VulkanRenderer::Shutdown();
