@@ -20,4 +20,8 @@ private:
 	static void CreateSwapChain();
 	static void CreateRenderPass();
 	static void CreateGraphicsPipeline();
+	static void CreateFramebuffers();
+	static void CreateCommandPool();
+	static void CreateCommandBuffers();
+	static void RecordCommands();
 };

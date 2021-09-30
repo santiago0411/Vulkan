@@ -256,7 +256,8 @@ namespace Utils
 		std::vector<VkImage> images(swapChainImageCount);
 		vkGetSwapchainImagesKHR(logicalDevice, swapChain, &swapChainImageCount, images.data());
 
-		std::vector<SwapChainImage> swapChainImages(swapChainImageCount);
+		std::vector<SwapChainImage> swapChainImages;
+		swapChainImages.reserve(images.size());
 
 		for (const auto& image: images)
 		{

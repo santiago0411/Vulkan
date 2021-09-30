@@ -29,10 +29,13 @@ struct RendererContext
 	VkPipelineLayout PipelineLayout = nullptr;
 	VkRenderPass RenderPass = nullptr;
 	VkPipeline GraphicsPipeline = nullptr;
+	VkCommandPool GraphicsCommandPool = nullptr;
 
 	VkFormat SwapChainImageFormat = VK_FORMAT_UNDEFINED;
 	VkExtent2D SwapChainExtent{};
 	std::vector<Utils::SwapChainImage> SwapChainImages{};
+	std::vector<VkFramebuffer> SwapChainFramebuffers{};
+	std::vector<VkCommandBuffer> CommandBuffers{};
 };
 
 static RendererContext* s_Context = nullptr;
@@ -78,6 +81,9 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 		CreateSwapChain();
 		CreateRenderPass();
 		CreateGraphicsPipeline();
+		CreateFramebuffers();
+		CreateCommandPool();
+		CreateCommandBuffers();
 
 		return true;
 	}
@@ -91,31 +97,23 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 
 void VulkanRenderer::Shutdown()
 {
-	DestroyDebugCallback();
+	vkDestroyCommandPool(s_Context->LogicalDevice, s_Context->GraphicsCommandPool, nullptr);
 
-	if (s_Context->GraphicsPipeline != nullptr)
-		vkDestroyPipeline(s_Context->LogicalDevice, s_Context->GraphicsPipeline, nullptr);
+	for (auto& framebuffer : s_Context->SwapChainFramebuffers)
+		vkDestroyFramebuffer(s_Context->LogicalDevice, framebuffer, nullptr);
 
-	if (s_Context->PipelineLayout != nullptr)
-		vkDestroyPipelineLayout(s_Context->LogicalDevice, s_Context->PipelineLayout, nullptr);
-
-	if (s_Context->RenderPass != nullptr)
-		vkDestroyRenderPass(s_Context->LogicalDevice, s_Context->RenderPass, nullptr);
+	vkDestroyPipeline(s_Context->LogicalDevice, s_Context->GraphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(s_Context->LogicalDevice, s_Context->PipelineLayout, nullptr);
+	vkDestroyRenderPass(s_Context->LogicalDevice, s_Context->RenderPass, nullptr);
 
 	for (auto& image : s_Context->SwapChainImages)
 		vkDestroyImageView(s_Context->LogicalDevice, image.ImageView, nullptr);
 
-	if (s_Context->SwapChain != nullptr)
-		vkDestroySwapchainKHR(s_Context->LogicalDevice, s_Context->SwapChain, nullptr);
-
-	if (s_Context->Surface != nullptr)
-		vkDestroySurfaceKHR(s_Context->VulkanInstance, s_Context->Surface, nullptr);
-
-	if (s_Context->LogicalDevice != nullptr)
-		vkDestroyDevice(s_Context->LogicalDevice, nullptr);
-
-	if (s_Context->VulkanInstance != nullptr)
-		vkDestroyInstance(s_Context->VulkanInstance, nullptr);
+	vkDestroySwapchainKHR(s_Context->LogicalDevice, s_Context->SwapChain, nullptr);
+	vkDestroySurfaceKHR(s_Context->VulkanInstance, s_Context->Surface, nullptr);
+	vkDestroyDevice(s_Context->LogicalDevice, nullptr);
+	DestroyDebugCallback();
+	vkDestroyInstance(s_Context->VulkanInstance, nullptr);
 
 	delete s_Context;
 }
@@ -486,4 +484,94 @@ void VulkanRenderer::CreateGraphicsPipeline()
 
 	vkDestroyShaderModule(s_Context->LogicalDevice, fragShaderModule, nullptr);
 	vkDestroyShaderModule(s_Context->LogicalDevice, vertexShaderModule, nullptr);
+}
+
+void VulkanRenderer::CreateFramebuffers()
+{
+	s_Context->SwapChainFramebuffers.resize(s_Context->SwapChainImages.size());
+
+	for (size_t i = 0; i < s_Context->SwapChainImages.size(); i++)
+	{
+		const VkImageView attachments[] = {
+			s_Context->SwapChainImages[i].ImageView
+		};
+
+		VkFramebufferCreateInfo framebufferCreateInfo = {};
+		framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferCreateInfo.renderPass = s_Context->RenderPass;
+		framebufferCreateInfo.attachmentCount = (uint32_t)std::size(attachments);
+		framebufferCreateInfo.pAttachments = attachments;
+		framebufferCreateInfo.width = s_Context->SwapChainExtent.width;
+		framebufferCreateInfo.height = s_Context->SwapChainExtent.height;
+		framebufferCreateInfo.layers = 1;
+
+		if (vkCreateFramebuffer(s_Context->LogicalDevice, &framebufferCreateInfo, nullptr, &s_Context->SwapChainFramebuffers[i]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create a Framebuffer!");
+	}
+	
+}
+
+void VulkanRenderer::CreateCommandPool()
+{
+	VkCommandPoolCreateInfo createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	createInfo.queueFamilyIndex = (uint32_t)s_Context->DeviceQueueFamilyIndices.GraphicsFamily;
+
+	if (vkCreateCommandPool(s_Context->LogicalDevice, &createInfo, nullptr, &s_Context->GraphicsCommandPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create a Command Pool!");
+}
+
+void VulkanRenderer::CreateCommandBuffers()
+{
+	s_Context->CommandBuffers.resize(s_Context->SwapChainFramebuffers.size());
+
+	VkCommandBufferAllocateInfo cbAllocInfo = {};
+	cbAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cbAllocInfo.commandPool = s_Context->GraphicsCommandPool;
+	cbAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cbAllocInfo.commandBufferCount = (uint32_t)s_Context->CommandBuffers.size();
+
+	if (vkAllocateCommandBuffers(s_Context->LogicalDevice, &cbAllocInfo, s_Context->CommandBuffers.data()) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate Command Buffers!");
+}
+
+void VulkanRenderer::RecordCommands()
+{
+	VkCommandBufferBeginInfo bufferBeginInfo = {};
+	bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	bufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
+	VkRenderPassBeginInfo renderPassBeginInfo = {};
+	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassBeginInfo.renderPass = s_Context->RenderPass;
+	renderPassBeginInfo.renderArea.offset = { 0, 0 };
+	renderPassBeginInfo.renderArea.extent = s_Context->SwapChainExtent;
+
+	constexpr VkClearValue clearValues[] = {
+		{ 0.6f, 0.65f, 0.4f, 1.0f }
+	};
+
+	renderPassBeginInfo.clearValueCount = (uint32_t)std::size(clearValues);
+	renderPassBeginInfo.pClearValues = clearValues;
+
+	for (size_t i = 0; i < s_Context->CommandBuffers.size(); i++)
+	{
+		const auto& commandBuffer = s_Context->CommandBuffers[i];
+		renderPassBeginInfo.framebuffer = s_Context->SwapChainFramebuffers[i];
+
+		if (vkBeginCommandBuffer(commandBuffer, &bufferBeginInfo) != VK_SUCCESS)
+			throw std::runtime_error("Failed to start recording a Command Buffer!");
+
+		{
+			vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Context->GraphicsPipeline);
+			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+			vkCmdEndRenderPass(commandBuffer);
+		}
+
+		if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("Failed to stop recording a Command Buffer!");
+	}
 }
