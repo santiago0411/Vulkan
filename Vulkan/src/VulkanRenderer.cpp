@@ -1,6 +1,6 @@
 #include "VulkanRenderer.h"
 
-#include "VulkanRendererUtils.h"
+#include "VulkanUtils.h"
 #include "VulkanShader.h"
 #include "VulkanMesh.h"
 
@@ -44,7 +44,7 @@ struct RendererContext
 
 static RendererContext* s_Context = nullptr;
 static uint32_t s_CurrentFrame = 0;
-static VulkanMesh s_Mesh;
+static std::vector<VulkanMesh> s_Meshes;
 
 #if defined(VULKAN_DEBUG)
 	#include "VulkanDebug.h"
@@ -84,24 +84,49 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 		CreateSurface();
 		GetPhysicalDevice();
 		CreateLogicalDevice();
-
-		const std::vector<Utils::VertexData> meshVertices = {
-			{ {  0.4f, -0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-			{ {  0.4f,  0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-			{ { -0.4f,  0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
-
-			{ { -0.4f,  0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ { -0.4f, -0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-			{ {  0.4f, -0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-		};
-
-		s_Mesh = VulkanMesh(s_Context->PhysicalDevice, s_Context->LogicalDevice, meshVertices);
-
 		CreateSwapChain();
 		CreateRenderPass();
 		CreateGraphicsPipeline();
 		CreateFramebuffers();
 		CreateCommandPool();
+
+		constexpr Utils::VertexData meshVertices[] = {
+			{ { -0.1f, -0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+			{ { -0.1f,  0.4f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+			{ { -0.9f,  0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+			{ { -0.9f, -0.4f, 0.0f }, { 1.0f, 1.0f, 0.0f, 1.0f } },
+		};
+
+		constexpr Utils::VertexData meshVertices2[] = {
+			{ {  0.9f, -0.3f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+			{ {  0.9f,  0.3f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
+			{ {  0.1f,  0.3f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+			{ {  0.1f, -0.3f, 0.0f }, { 1.0f, 1.0f, 0.0f, 1.0f } },
+		};
+
+		constexpr uint32_t meshIndices[] = {
+			0, 1, 2,
+			2, 3, 0
+		};
+
+		VulkanMesh::MeshCreateInfo meshCreateInfo = {
+			meshCreateInfo.PhysicalDevice = s_Context->PhysicalDevice,
+			meshCreateInfo.LogicalDevice = s_Context->LogicalDevice,
+			meshCreateInfo.TransferQueue = s_Context->GraphicsQueue,
+			meshCreateInfo.TransferCommandPool = s_Context->GraphicsCommandPool,
+			meshCreateInfo.Vertices = meshVertices,
+			meshCreateInfo.VerticesCount = (uint32_t)std::size(meshVertices),
+			meshCreateInfo.Indices = meshIndices,
+			meshCreateInfo.IndicesCount = (uint32_t)std::size(meshIndices)
+		};
+
+		VulkanMesh::MeshCreateInfo meshCreateInfo2 = meshCreateInfo;
+		meshCreateInfo2.Vertices = meshVertices2;
+		meshCreateInfo2.VerticesCount = (uint32_t)std::size(meshVertices2);
+
+		s_Meshes.emplace_back(VulkanMesh(meshCreateInfo));
+		s_Meshes.emplace_back(VulkanMesh(meshCreateInfo2));
+
 		CreateCommandBuffers();
 		RecordCommands();
 		CreateSynchronization();
@@ -164,7 +189,8 @@ void VulkanRenderer::Shutdown()
 {
 	vkDeviceWaitIdle(s_Context->LogicalDevice);
 
-	s_Mesh.Destroy();
+	for (auto& mesh : s_Meshes)
+		mesh.Destroy();
 
 	for (uint32_t i = 0; i < Utils::MAX_FRAME_DRAWS; i++)
 	{
@@ -659,11 +685,16 @@ void VulkanRenderer::RecordCommands()
 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Context->GraphicsPipeline);
 
-			const VkBuffer vertexBuffers[] = { s_Mesh.GetVertexBuffer() };
-			constexpr VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers(commandBuffer, 0, (uint32_t)std::size(vertexBuffers), vertexBuffers, offsets);
+			for (const auto& mesh : s_Meshes)
+			{
+				const VkBuffer vertexBuffers[] = { mesh.GetVertexBuffer() };
+				constexpr VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(commandBuffer, 0, (uint32_t)std::size(vertexBuffers), vertexBuffers, offsets);
 
-			vkCmdDraw(commandBuffer, s_Mesh.GetVertexCount(), 1, 0, 0);
+				vkCmdBindIndexBuffer(commandBuffer, mesh.GetIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+				vkCmdDrawIndexed(commandBuffer, mesh.GetIndicesCount(), 1, 0, 0, 0);
+			}
 
 			vkCmdEndRenderPass(commandBuffer);
 		}

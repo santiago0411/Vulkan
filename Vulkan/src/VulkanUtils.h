@@ -293,4 +293,105 @@ namespace Utils
 		if (vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
 			throw std::runtime_error("Error creating shader module!");
 	}
+
+	struct CreateBufferInfo
+	{
+		VkPhysicalDevice PhysicalDevice;
+		VkDevice LogicalDevice;
+		VkDeviceSize BufferSize;
+		VkBufferUsageFlags BufferUsage;
+		VkMemoryPropertyFlags BufferProperties;
+		VkBuffer* Buffer;
+		VkDeviceMemory* BufferMemory;
+	};
+
+	static uint32_t FindMemoryTypeIndex(VkPhysicalDevice physicalDevice, uint32_t allowedTypes, VkMemoryPropertyFlags flags)
+	{
+		VkPhysicalDeviceMemoryProperties memProperties;
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+		{
+			VkMemoryType& memType = memProperties.memoryTypes[i];
+			if (allowedTypes & (1 << i) && (memType.propertyFlags & flags) == flags)
+				return i;
+		}
+
+		return UINT32_MAX;
+	}
+
+	static void CreateBuffer(const CreateBufferInfo& createBufferInfo)
+	{
+		VkBufferCreateInfo bufferCreateInfo = {};
+		bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		bufferCreateInfo.size = createBufferInfo.BufferSize;
+		bufferCreateInfo.usage = createBufferInfo.BufferUsage;
+		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+		if (vkCreateBuffer(createBufferInfo.LogicalDevice, &bufferCreateInfo, nullptr, createBufferInfo.Buffer) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create a Buffer");
+
+		VkMemoryRequirements memRequirements;
+		vkGetBufferMemoryRequirements(createBufferInfo.LogicalDevice, *createBufferInfo.Buffer, &memRequirements);
+
+		VkMemoryAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		allocInfo.allocationSize = memRequirements.size;
+		allocInfo.memoryTypeIndex = FindMemoryTypeIndex(createBufferInfo.PhysicalDevice, memRequirements.memoryTypeBits, createBufferInfo.BufferProperties);
+
+		if (vkAllocateMemory(createBufferInfo.LogicalDevice, &allocInfo, nullptr, createBufferInfo.BufferMemory) != VK_SUCCESS)
+			throw std::runtime_error("Failed to allocate Buffer Memory!");
+
+		vkBindBufferMemory(createBufferInfo.LogicalDevice, *createBufferInfo.Buffer, *createBufferInfo.BufferMemory, 0);
+	}
+
+	struct CopyBufferInfo
+	{
+		VkDevice Device;
+		VkQueue TransferQueue;
+		VkCommandPool TransferCommandPool;
+		VkBuffer SrcBuffer;
+		VkBuffer DstBuffer;
+		VkDeviceSize BufferSize;
+	};
+
+	static void CopyBuffer(const CopyBufferInfo& copyBufferInfo)
+	{
+		VkCommandBuffer transferCommandBuffer;
+
+		VkCommandBufferAllocateInfo allocInfo = {};
+		allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		allocInfo.commandPool = copyBufferInfo.TransferCommandPool;
+		allocInfo.commandBufferCount = 1;
+
+		if (vkAllocateCommandBuffers(copyBufferInfo.Device, &allocInfo, &transferCommandBuffer) != VK_SUCCESS)
+			throw std::runtime_error("Failed to allocate a Command Buffer!");
+
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+		vkBeginCommandBuffer(transferCommandBuffer, &beginInfo);
+
+		VkBufferCopy bufferCopyRegion = {
+			bufferCopyRegion.srcOffset = 0,
+			bufferCopyRegion.dstOffset = 0,
+			bufferCopyRegion.size = copyBufferInfo.BufferSize
+		};
+
+		vkCmdCopyBuffer(transferCommandBuffer, copyBufferInfo.SrcBuffer, copyBufferInfo.DstBuffer, 1, &bufferCopyRegion);
+
+		vkEndCommandBuffer(transferCommandBuffer);
+
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &transferCommandBuffer;
+
+		vkQueueSubmit(copyBufferInfo.TransferQueue, 1, &submitInfo, nullptr);
+		vkQueueWaitIdle(copyBufferInfo.TransferQueue);
+
+		vkFreeCommandBuffers(copyBufferInfo.Device, copyBufferInfo.TransferCommandPool, 1, &transferCommandBuffer);
+	}
 }
