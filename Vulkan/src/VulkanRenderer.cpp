@@ -2,6 +2,7 @@
 
 #include "VulkanRendererUtils.h"
 #include "VulkanShader.h"
+#include "VulkanMesh.h"
 
 #pragma warning(push, 0)
 #include <GLFW/glfw3.h>
@@ -9,7 +10,6 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <vector>
 #include <unordered_set>
 
 
@@ -37,13 +37,14 @@ struct RendererContext
 	std::vector<VkFramebuffer> SwapChainFramebuffers{};
 	std::vector<VkCommandBuffer> CommandBuffers{};
 
-	VkSemaphore ImageAvailableSemaphores[Utils::MAX_FRAME_DRAWS];
-	VkSemaphore RenderFinishedSemaphores[Utils::MAX_FRAME_DRAWS];
-	VkFence DrawFences[Utils::MAX_FRAME_DRAWS];
+	VkSemaphore ImageAvailableSemaphores[Utils::MAX_FRAME_DRAWS]{};
+	VkSemaphore RenderFinishedSemaphores[Utils::MAX_FRAME_DRAWS]{};
+	VkFence DrawFences[Utils::MAX_FRAME_DRAWS]{};
 };
 
 static RendererContext* s_Context = nullptr;
 static uint32_t s_CurrentFrame = 0;
+static VulkanMesh s_Mesh;
 
 #if defined(VULKAN_DEBUG)
 	#include "VulkanDebug.h"
@@ -72,7 +73,6 @@ static uint32_t s_CurrentFrame = 0;
 
 bool VulkanRenderer::Init(Ref<Window> windowContext)
 {
-
 	if (s_Context != nullptr)
 		return true;
 
@@ -84,6 +84,19 @@ bool VulkanRenderer::Init(Ref<Window> windowContext)
 		CreateSurface();
 		GetPhysicalDevice();
 		CreateLogicalDevice();
+
+		const std::vector<Utils::VertexData> meshVertices = {
+			{ {  0.4f, -0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+			{ {  0.4f,  0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+			{ { -0.4f,  0.4f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } },
+
+			{ { -0.4f,  0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+			{ { -0.4f, -0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+			{ {  0.4f, -0.4f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
+		};
+
+		s_Mesh = VulkanMesh(s_Context->PhysicalDevice, s_Context->LogicalDevice, meshVertices);
+
 		CreateSwapChain();
 		CreateRenderPass();
 		CreateGraphicsPipeline();
@@ -150,6 +163,8 @@ void VulkanRenderer::Draw()
 void VulkanRenderer::Shutdown()
 {
 	vkDeviceWaitIdle(s_Context->LogicalDevice);
+
+	s_Mesh.Destroy();
 
 	for (uint32_t i = 0; i < Utils::MAX_FRAME_DRAWS; i++)
 	{
@@ -444,12 +459,29 @@ void VulkanRenderer::CreateGraphicsPipeline()
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertexShaderCreateInfo, fragmentShaderCreateInfo };
 
+	VkVertexInputBindingDescription bindingDescription = {};
+	bindingDescription.binding = 0;
+	bindingDescription.stride = sizeof(Utils::VertexData);
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	VkVertexInputAttributeDescription attributeDescriptions[2];
+
+	attributeDescriptions[0].binding = 0;
+	attributeDescriptions[0].location = 0;
+	attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[0].offset = offsetof(Utils::VertexData, Position);
+
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 1;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	attributeDescriptions[1].offset = offsetof(Utils::VertexData, Color);
+
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 	vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-	vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+	vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+	vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputCreateInfo.vertexAttributeDescriptionCount = (uint32_t)std::size(attributeDescriptions);
+	vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDescriptions;
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
 	inputAssemblyCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -626,7 +658,12 @@ void VulkanRenderer::RecordCommands()
 			vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, s_Context->GraphicsPipeline);
-			vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+			const VkBuffer vertexBuffers[] = { s_Mesh.GetVertexBuffer() };
+			constexpr VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, (uint32_t)std::size(vertexBuffers), vertexBuffers, offsets);
+
+			vkCmdDraw(commandBuffer, s_Mesh.GetVertexCount(), 1, 0, 0);
 
 			vkCmdEndRenderPass(commandBuffer);
 		}
