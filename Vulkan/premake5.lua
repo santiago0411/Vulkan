@@ -68,3 +68,8 @@ project "Vulkan"
 			"%{Library.SPIRV_Cross_GLSL_Release}",
 			"%{Library.Vulkan}"
 		}
+
+		postbuildcommands
+		{
+			"{COPYDIR} \"%{LibraryDir.VulkanSDK_DebugDLL}\" \"%{cfg.targetdir}\""
+		}
